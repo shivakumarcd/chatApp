@@ -1,3 +1,17 @@
+### Next task
+* Resolve previous commit PR comments
+* Automate integration test using docker to start db and start server
+* Add grafana/prometheus for monitoring
+* Add front end using React
+* Redo backend with python
+* Load/performance testing-how many requests it can handle
+* Deploy in K8 and scaling
+
+### TODO from PR review comments
+* Remove hardcoded db credentials in code
+* refactor html files (its huge, split into multiple files like js css in separate files)
+* add integration test for file share
+
 ### Quick start
 * cd collabchat
 * java -version         ##### 20 
@@ -22,27 +36,17 @@
   * docker exec -it collabchat-mysql mysql -uroot -prootpass collabchat_db
     * mysql> show tables
 
+## WARNING:
+* Security certificates:
+  * Self-signed certificates provided in repo(/certs) are for testing purpose only and should not be used in production.
+  * For production, use valid SSL certificates from a trusted CA instead of self-signed and to be stored in secure vault.
+  
+  
 
-# Getting Started
 
-### Reference Documentation
-For further reference, please consider the following sections:
-
-* [Official Gradle documentation](https://docs.gradle.org)
-* [Spring Boot Gradle Plugin Reference Guide](https://docs.spring.io/spring-boot/3.5.6/gradle-plugin)
-* [Create an OCI image](https://docs.spring.io/spring-boot/3.5.6/gradle-plugin/packaging-oci-image.html)
-
-### Additional Links
-
-These additional references should also help you:
-
-* [Gradle Build Scans – insights for your project's build](https://scans.gradle.com#gradle)
-
----
 
 ### Build and Run Instructions
-
-#### Java Version Compatibility : 20
+Java Version Compatibility : 20
 
 To build the project:
 Ensure you have Java 20 and Gradle installed. Then, run the following commands in the project root directory:

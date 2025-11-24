@@ -1,0 +1,74 @@
+# yaml
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: collabchat-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: collabchat_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./init-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    networks:
+      - collabnet
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: collabchat:latest
+    container_name: collabchat_app
+    ports:
+      # Mapping 8080(left) port of host to 8080(right) port of container
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/collabchat_db
+      SPRING_DATASOURCE_USERNAME: collabuser
+      SPRING_DATASOURCE_PASSWORD: collabpass
+      SPRING_PROFILES_ACTIVE: prod
+    networks:
+      - collabnet
+    restart: unless-stopped
+    healthcheck:
+      # Using actuator health endpoint provide by Spring Boot to check application health
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  nginx:
+    image: nginx:stable
+    container_name: collabchat_nginx
+    ports:
+      # Mapping 80(left) port of host to 80(right) port of container
+      # Mapping 443(left) port of host to 443(right) port of container
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+    networks:
+      - collabnet
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  collabnet:
+    driver: bridge
