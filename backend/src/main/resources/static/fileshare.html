@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Shared Files</title>
+    <style>
+        body {
+            font-family: "Inter", Arial, sans-serif;
+            padding: 24px;
+            background: #f9fafb;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 12px;
+        }
+        .section {
+            background: #fff;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .error {
+            color: crimson;
+        }
+        .loading {
+            color: #555;
+        }
+        .file-list {
+            display: grid;
+            gap: 12px;
+        }
+        .file-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-info {
+            font-size: 14px;
+        }
+        .file-info strong {
+            font-weight: 600;
+        }
+        .file-meta {
+            font-size: 12px;
+            color: #555;
+        }
+        .download-link {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 10px;
+            background: #0b84ff;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .download-link:hover {
+            background: #0a6fe0;
+        }
+        .upload-form input[type="file"] {
+            margin-bottom: 10px;
+        }
+        .upload-form input[type="number"],
+        .upload-form button {
+            padding: 8px;
+            font-size: 14px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        .upload-form button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .upload-form button:hover {
+            background: #1e4ed8;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Shared Files</h1>
+
+<!-- === File Share Section === -->
+<div class="section">
+    <h2 style="font-size: 18px; margin-bottom: 10px;">Share a File</h2>
+    <form id="shareForm" class="upload-form">
+        <div>
+            <input type="file" id="fileInput" required />
+        </div>
+        <div style="margin-top: 8px;">
+            <label for="toUserId">Share To User ID:</label>
+            <input type="text" id="toUserId" placeholder="Enter user ID" required />
+            <button type="submit">Share File</button>
+        </div>
+    </form>
+    <p id="uploadStatus" class="loading" style="margin-top: 8px;"></p>
+</div>
+
+<!-- === Shared Files Section === -->
+<div class="section">
+    <p id="status" class="loading">Loading shared files…</p>
+    <div id="fileContainer"></div>
+</div>
+
+<script>
+    const token = localStorage.getItem('authToken');
+    const apiBase = "https://localhost/api/files";
+    const currentUserId = 2; // change as needed for testing
+
+    const statusEl = document.getElementById("status");
+    const fileContainer = document.getElementById("fileContainer");
+    const shareForm = document.getElementById("shareForm");
+    const uploadStatus = document.getElementById("uploadStatus");
+
+    // === FETCH FILES ===
+    async function fetchSharedFiles() {
+        statusEl.textContent = "Loading shared files…";
+        fileContainer.innerHTML = "";
+
+        try {
+            const res = await fetch(`${apiBase}/shared-to/`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error(`Failed to fetch shared files: ${res.status} ${res.statusText}`);
+
+            const files = await res.json();
+            renderSharedFiles(files);
+
+        } catch (err) {
+            statusEl.textContent = "";
+            const errorEl = document.createElement("p");
+            errorEl.textContent = "Error: " + err.message;
+            errorEl.className = "error";
+            document.body.appendChild(errorEl);
+        }
+    }
+
+    // === SHARE FILE ===
+    shareForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const file = document.getElementById("fileInput").files[0];
+        const toUserId = document.getElementById("toUserId").value;
+        if (!file || !toUserId) return;
+
+        uploadStatus.textContent = "Uploading...";
+        uploadStatus.style.color = "#555";
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("sharedFromUserId", currentUserId);
+        formData.append("sharedToUserId", toUserId);
+
+        try {
+            const res = await fetch(`${apiBase}/share`, {
+                method: "POST",
+                body: formData,
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Failed to share file: ${res.status} ${res.statusText} - ${text}`);
+            }
+
+            uploadStatus.textContent = "✅ File shared successfully!";
+            uploadStatus.style.color = "green";
+            shareForm.reset();
+            fetchSharedFiles(); // refresh list
+
+        } catch (err) {
+            uploadStatus.textContent = "❌ " + err.message;
+            uploadStatus.style.color = "crimson";
+        }
+    });
+
+    // === RENDER SHARED FILES ===
+    function renderSharedFiles(files) {
+        statusEl.textContent = "";
+        fileContainer.innerHTML = "";
+
+        if (!files || files.length === 0) {
+            const p = document.createElement("p");
+            p.textContent = "No files shared with you yet.";
+            p.style.color = "#555";
+            fileContainer.appendChild(p);
+            return;
+        }
+
+        const list = document.createElement("div");
+        list.className = "file-list";
+
+        for (const file of files) {
+            const card = document.createElement("div");
+            card.className = "file-card";
+
+            const infoDiv = document.createElement("div");
+            infoDiv.className = "file-info";
+            infoDiv.innerHTML = `
+          <div><strong>${file.fileName || file.storedFileName || "Unnamed File"}</strong></div>
+          <div class="file-meta">Shared from <strong>${file.sharedFromUserId}</strong></div>
+        `;
+
+            const rightDiv = document.createElement("div");
+            rightDiv.style.textAlign = "right";
+
+            const sharedAt = document.createElement("div");
+            sharedAt.className = "file-meta";
+            sharedAt.textContent = file.sharedAt
+                ? new Date(file.sharedAt).toLocaleString()
+                : "";
+
+            const downloadLink = document.createElement("a");
+            downloadLink.className = "download-link";
+            downloadLink.href = `${apiBase}/download/${file.id}`;
+            downloadLink.textContent = "Download";
+
+            rightDiv.appendChild(sharedAt);
+            rightDiv.appendChild(downloadLink);
+
+            card.appendChild(infoDiv);
+            card.appendChild(rightDiv);
+            list.appendChild(card);
+        }
+
+        fileContainer.appendChild(list);
+    }
+
+    // === INIT ===
+    fetchSharedFiles();
+</script>
+
+</body>
+</html>

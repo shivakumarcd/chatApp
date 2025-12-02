@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SimplePost Tester</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; }
+    input[type="text"] { width: 300px; padding: 6px; }
+    button { padding: 6px 12px; margin-left: 8px; }
+    pre { background:#f4f4f4; padding:12px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <h3>Send message to /simplePost</h3>
+  <form id="msgForm">
+    <input id="message" type="text" placeholder="Type message..." required />
+    <button id="sendBtn" type="submit">Send</button>
+  </form>
+
+  <h4>Response</h4>
+  <pre id="response">No response yet.</pre>
+
+  <hr>
+
+
+  <h3>Login</h3>
+  <form id="loginForm" onsubmit="return doLogin(event)">
+    <label>Username: <input id="username" required /></label><br/>
+    <label>Password: <input id="password" type="password" required /></label><br/>
+    <button type="submit">Login</button>
+  </form>
+  <pre id="status"></pre>
+
+  <hr>
+
+  <h3>Registration</h3>
+  <form id="registrationForm" onsubmit="return doRegister(event)">
+    <label>Username: <input id="reg-username" required /></label><br/>
+    <label>Password: <input id="reg-password" type="password" required /></label><br/>
+    <button type="submit">Register</button>
+  </form>
+  <pre id="reg-status">No response yet.</pre>
+
+  <hr>
+
+  <script>
+    /**
+      Script to handle simple POST request
+     */
+    const form = document.getElementById('msgForm');
+    const input = document.getElementById('message');
+    const resp = document.getElementById('response');
+    form.addEventListener('submit', async (e) => {
+      console.log("In submit event listener");
+      e.preventDefault();
+      const message = input.value.trim();
+      if (!message) return;
+
+      const payload = { message };
+
+      try {
+        const res = await fetch('/simplePost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          resp.textContent = `Error: ${res.status} ${res.statusText}`;
+          return;
+        }
+
+        const data = await res.json();
+        resp.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resp.textContent = 'Network error: ' + err;
+      }
+    });
+
+
+    /**
+      Script to handle login
+     */
+    function bufToHex(buffer) {
+      return Array.from(new Uint8Array(buffer))
+              .map(b => b.toString(16).padStart(2, '0'))
+              .join('');
+    }
+
+    async function sha256Hex(text) {
+      const enc = new TextEncoder();
+      const data = enc.encode(text);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      return bufToHex(hash);
+    }
+
+    async function doLogin(e) {
+      console.log("Handling login click");
+      e.preventDefault();
+      const statusEl = document.getElementById('status');
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+      if (!user || !pass) {
+        statusEl.textContent = 'Please enter username and password';
+        return false;
+      }
+
+      // disable submit button to avoid duplicate requests
+      const submitBtn = e.submitter || document.querySelector('#loginForm button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      console.log("disabled submit button, proceeding with login");
+
+      try {
+        statusEl.textContent = 'Hashing password...';
+        const passHash = await sha256Hex(pass);
+        statusEl.textContent = 'Posting hashed credentials...';
+
+        console.log("POST /login2 with user:", user);
+        let res = await fetch('/login2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, passwordHash: passHash, password : pass })
+        });
+
+        if (!res.ok) {
+          console.log("login failed with status:", res.status);
+          const txt = await res.text();
+          statusEl.textContent = 'Login failed: ' + txt;
+          return false;
+        }
+
+        console.log("login response ok, parsing JSON");
+        const body = await res.json();
+        const token = body && body.token;
+        console.log("received token:", token);
+        if (!token) {
+          statusEl.textContent = 'Login failed: no token returned';
+          return false;
+        }
+
+        // persist token for later (or use cookies on server for automatic sending)
+        localStorage.setItem('authToken', token);
+        window.location.href = '/fileshare.html';
+        /*statusEl.textContent = 'Login successful — fetching protected page...';
+        console.log("token stored and proceeding to fetching /secure with token");
+        // reuse same variable name `res` (no redeclaration)
+        res = await fetch('/secure', {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        console.log("/secure fetch returned with status:", res.status);
+
+        if (res.ok) {
+          console.log("access to /secure granted, loading HTML");
+          const html = await res.text();
+          // replace current document with protected HTML (POC)
+          document.open();
+          document.write(html);
+          document.close();
+        } else {
+          const txt = await res.text();
+          statusEl.textContent = 'Access denied: ' + txt;
+        }*/
+      } catch (err) {
+        statusEl.textContent = 'Network error: ' + err;
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+
+      return false;
+    }
+
+    /**
+     Script to handle registration
+     */
+    async function doRegister(e) {
+      console.log("Handling registration submit");
+      e.preventDefault();
+      const statusEl = document.getElementById('reg-status');
+      const user = document.getElementById('reg-username').value.trim();
+      const pass = document.getElementById('reg-password').value;
+      if (!user || !pass) {
+        statusEl.textContent = 'Please enter username and password';
+        return false;
+      }
+
+      const submitBtn = e.submitter || document.querySelector('#registrationForm button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      try {
+        statusEl.textContent = 'Registering...';
+        const res = await fetch('/registrationBCrypt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+
+        const text = await res.text();
+        if (!res.ok) {
+          statusEl.textContent = `Registration failed: ${res.status} ${text}`;
+        } else {
+          statusEl.textContent = `Registration successful: ${text}`;
+        }
+      } catch (err) {
+        statusEl.textContent = 'Network error: ' + err;
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+
+      return false;
+    }
+  </script>
+</body>
+</html>
